@@ -18,9 +18,6 @@ def createadjacency(images, graph, outputfile):
     Returns
     --------
     """
-    print images
-    print graph
-    print outputfile
 
     image_lookup = {}
     for i, img in enumerate(images):
@@ -111,4 +108,4 @@ def load_sparse_mat(name, store='store.h5'):
         for par in ('data', 'indices', 'indptr', 'shape'):
             pars.append(getattr(f.root, '%s_%s' % (name, par)).read())
     m = csr_matrix(tuple(pars[:3]), shape=pars[3])
-    return mi
+    return m

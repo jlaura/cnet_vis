@@ -1,5 +1,7 @@
+from ast import literal_eval
 from collections import defaultdict
 from itertools import combinations
+import re
 
 import tables as tb
 import pandas as pd
@@ -70,6 +72,32 @@ class ControlPoint(tb.IsDescription):
     #reference = tb.BoolCol()
 
 
+
+def getoffsets(inputcnet):
+    """
+    Read the beginning of the PVL to get the offset information
+    """
+
+    fileend = re.compile(r"\bEnd\b", re.IGNORECASE)
+    headerstart = re.compile(r"\s*\bHeaderStartByte\b", re.IGNORECASE)
+    headerbytes = re.compile(r"\s*\bHeaderBytes\b", re.IGNORECASE)
+    pointstart = re.compile(r"\s*\bPointsStartByte\b", re.IGNORECASE)
+
+
+
+    with open(inputcnet, 'r') as incnet:
+        for line in incnet:
+            if fileend.match(line):
+                break
+            elif headerstart.match(line):
+                headerstartbyte = literal_eval(line.split('=')[-1].strip())
+            elif headerbytes.match(line):
+                headerlength = literal_eval(line.split('=')[-1].strip())
+            elif pointstart.match(line):
+                pointstartbyte = literal_eval(line.split('=')[-1].strip())
+
+    return headerstartbyte, headerlength, pointstartbyte
+
 def createhdf5(inputcnet, outputfile):
     """
     Creates the hdf5 file containing all of the observations and
@@ -81,6 +109,10 @@ def createhdf5(inputcnet, outputfile):
     outputfile      str the name/path of the output file
 
     """
+
+
+    headerstart, headerlength, pointstart = getoffsets(inputcnet)
+
     h5file = tb.open_file(outputfile, mode='w', title='cnet')
     image_group = h5file.create_group('/', 'Images', 'Lookup table of images to image serials')
 
@@ -102,12 +134,13 @@ def createhdf5(inputcnet, outputfile):
     graph = defaultdict(int)
     images = set([])
     #Open the input dataset
-    with open('Elysium_DayIR_Final.net', 'r') as stream:
+    with open(inputcnet, 'r') as stream:
         header = spec.ControlNetFileHeaderV0002()
-        stream.seek(65536)  #Why are we doing more custom stuff?
-        headerbinary = stream.read(513513)
+        stream.seek(headerstart)  #Why are we doing more custom stuff?
+        headerbinary = stream.read(headerlength)
         header.ParseFromString(headerbinary)
         binarysizes = header.pointMessageSizes
+        stream.seek(pointstart)  #This should be a redundant seek since the header should end where the points start.
         for i, chunk in enumerate(binarysizes):
             #Read the message
             binary = stream.read(chunk)
